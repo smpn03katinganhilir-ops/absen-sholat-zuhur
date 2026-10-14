@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Absen Sholat Zuhur - SMPN 3 Katingan Hilir</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <!-- HTML5 QRCode -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <!-- PapaParse untuk CSV -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- SheetJS (Excel) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- jsPDF & AutoTable (PDF) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        .tab-btn.active { border-bottom: 2px solid #3b82f6; color: #3b82f6; font-weight: bold; }
+        .hidden-el { display: none !important; }
+        #reader video { border-radius: 0.5rem; object-fit: cover; }
+        .loading-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.8); z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        .spinner { border: 4px solid rgba(0, 0, 0, 0.1); width: 40px; height: 40px; border-radius: 50%; border-left-color: #3b82f6; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        /* Responsive Table */
+        .table-wrapper { overflow-x: auto; }
+    </style>
+</head>
+<body class="text-gray-800 antialiased flex flex-col min-h-screen">
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay hidden-el">
+        <div class="spinner mb-2"></div>
+        <p class="text-gray-600 font-semibold" id="loadingText">Memuat Data...</p>
+    </div>
+
+    <header class="bg-white shadow-sm sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <img src="https://lh3.googleusercontent.com/d/1WECs7Xi6PpKbTSad0WvZGbLKnxc0iSpp" alt="Logo" class="h-12 w-12 object-contain" onerror="this.src='https://placehold.co/100x100/3b82f6/white?text=SMP3'">
+                <div>
+                    <h1 class="text-xs sm:text-sm text-gray-500 uppercase tracking-wider">Selamat Datang di Aplikasi Absen Siswa</h1>
+                    <h2 class="text-sm sm:text-lg font-bold text-gray-900 leading-tight">SMP NEGERI 3 KATINGAN HILIR</h2>
+                </div>
+            </div>
+            <div class="text-right flex flex-col items-end">
+                <button onclick="openAdminLogin()" class="text-gray-400 hover:text-blue-600 transition" title="Login Admin">
+                    <i class="fas fa-user-shield text-xl"></i>
+                </button>
+                <div id="liveClock" class="text-xs sm:text-sm font-semibold text-blue-600 mt-1 bg-blue-50 px-2 py-1 rounded">
+                    Memuat waktu...
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full" id="publicView">
+        
+        <!-- Statistik Harian -->
+        <div class="bg-white rounded-lg shadow p-4 mb-6 flex flex-wrap justify-between items-center gap-2 sm:gap-4 text-center divide-x divide-gray-200">
+            <div class="px-2 flex-1"><p class="text-xs text-gray-500 uppercase">Total Siswa</p><p class="text-lg font-bold text-gray-800" id="statTotal">0</p></div>
+            <div class="px-2 flex-1"><p class="text-xs text-gray-500 uppercase text-green-600">Hadir</p><p class="text-lg font-bold text-green-600" id="statH">0</p></div>
+            <div class="px-2 flex-1"><p class="text-xs text-gray-500 uppercase text-yellow-600">Sakit</p><p class="text-lg font-bold text-yellow-600" id="statS">0</p></div>
+            <div class="px-2 flex-1"><p class="text-xs text-gray-500 uppercase text-blue-600">Izin</p><p class="text-lg font-bold text-blue-600" id="statI">0</p></div>
+            <div class="px-2 flex-1"><p class="text-xs text-gray-500 uppercase text-red-600">Alpa</p><p class="text-lg font-bold text-red-600" id="statA">0</p></div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- QR Scanner Section -->
+            <div class="bg-white rounded-lg shadow p-4 flex flex-col items-center">
+                <h3 class="text-lg font-bold text-gray-800 mb-2 border-b pb-2 w-full text-center">
+                    <i class="fas fa-qrcode mr-2"></i>Scan NISN
+                </h3>
+                <div id="reader" class="w-full max-w-md h-auto overflow-hidden rounded-lg border-2 border-dashed border-gray-300"></div>
+                <p class="text-sm text-gray-500 mt-3 text-center">Arahkan QR Code NISN Siswa ke kamera.<br>Absen: 11.30 (Hadir) - 13.00 (Terlambat)</p>
+            </div>
+
+            <!-- Tabs Section -->
+            <div class="bg-white rounded-lg shadow overflow-hidden flex flex-col">
+                <div class="flex border-b">
+                    <button class="flex-1 py-3 text-center text-sm font-medium tab-btn active" onclick="switchPublicTab('belum')">Belum Absen</button>
+                    <button class="flex-1 py-3 text-center text-sm font-medium tab-btn" onclick="switchPublicTab('sudah')">Sudah Absen Hari Ini</button>
+                </div>
+                
+                <div class="p-4 flex-grow flex flex-col">
+                    <div class="flex justify-between items-center mb-3">
+                        <input type="text" id="publicSearch" placeholder="Cari nama..." class="border rounded px-3 py-1 text-sm w-full sm:w-1/2" onkeyup="renderPublicTable()">
+                        <select id="publicClassFilter" class="border rounded px-3 py-1 text-sm ml-2" onchange="renderPublicTable()">
+                            <option value="">Semua Kelas</option>
+                        </select>
+                    </div>
+                    
+                    <div class="table-wrapper flex-grow">
+                        <table class="min-w-full divide-y divide-gray-200 text-sm" id="publicTable">
+                            <thead class="bg-gray-50 sticky top-0">
+                                <tr>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">No</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Nama Siswa</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Kelas</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase" id="colStatusTime">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200" id="publicTableBody">
+                                <!-- Data akan dimuat disini -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <!-- Paginasi -->
+                    <div class="flex justify-between items-center mt-4 text-sm" id="publicPagination"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full hidden-el" id="adminView">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-2xl font-bold text-gray-800"><i class="fas fa-cogs mr-2"></i>Panel Admin</h2>
+            <button onclick="logoutAdmin()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded shadow text-sm font-medium transition">Logout</button>
+        </div>
+
+        <div class="bg-white rounded-lg shadow mb-6">
+            <div class="flex border-b overflow-x-auto whitespace-nowrap">
+                <button class="px-6 py-3 text-sm font-medium tab-btn admin-tab active" onclick="switchAdminTab('dataAbsen')">Data Absen</button>
+                <button class="px-6 py-3 text-sm font-medium tab-btn admin-tab" onclick="switchAdminTab('inputManual')">Input Manual/Kolektif</button>
+                <button class="px-6 py-3 text-sm font-medium tab-btn admin-tab" onclick="switchAdminTab('rekapitulasi')">Rekap & Grafik</button>
+            </div>
+
+            <div class="p-4" id="adminContent">
+                <!-- Data Absen Tab -->
+                <div id="tab-dataAbsen">
+                    <div class="flex flex-wrap gap-2 justify-between items-center mb-4 bg-gray-50 p-3 rounded border">
+                        <div class="flex gap-2 items-center flex-wrap">
+                            <input type="date" id="adminDateFilter" class="border rounded px-3 py-1.5 text-sm" onchange="fetchData()">
+                            <select id="adminClassFilter" class="border rounded px-3 py-1.5 text-sm" onchange="renderAdminTable()">
+                                <option value="">Semua Kelas</option>
+                            </select>
+                            <input type="text" id="adminSearch" placeholder="Cari nama..." class="border rounded px-3 py-1.5 text-sm w-48" onkeyup="renderAdminTable()">
+                        </div>
+                        <div>
+                            <button onclick="refreshData()" class="bg-blue-100 text-blue-700 hover:bg-blue-200 px-3 py-1.5 rounded text-sm transition"><i class="fas fa-sync-alt mr-1"></i>Refresh</button>
+                            <button onclick="deleteAllDataWarning()" class="bg-red-100 text-red-700 hover:bg-red-200 px-3 py-1.5 rounded text-sm transition ml-2"><i class="fas fa-trash-alt mr-1"></i>Hapus Semua Data Hari Ini</button>
+                        </div>
+                    </div>
+
+                    <div class="table-wrapper">
+                        <table class="min-w-full divide-y divide-gray-200 text-sm border">
+                            <thead class="bg-gray-100">
+                                <tr>
+                                    <th class="px-2 py-2 text-left">No</th>
+                                    <th class="px-2 py-2 text-left">NISN</th>
+                                    <th class="px-2 py-2 text-left">Nama</th>
+                                    <th class="px-2 py-2 text-left">Kelas</th>
+                                    <th class="px-2 py-2 text-center">Status</th>
+                                    <th class="px-2 py-2 text-left">Waktu</th>
+                                    <th class="px-2 py-2 text-left">Ket / Terlambat</th>
+                                    <th class="px-2 py-2 text-center">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adminTableBody" class="divide-y divide-gray-200"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Input Manual Tab -->
+                <div id="tab-inputManual" class="hidden-el">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <!-- Form Settings -->
+                        <div class="bg-gray-50 p-4 rounded border">
+                            <h3 class="font-bold mb-3 border-b pb-2">Pengaturan Input</h3>
+                            <div class="mb-3">
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Tanggal</label>
+                                <input type="date" id="manualDate" class="w-full border rounded px-3 py-2 text-sm">
+                            </div>
+                            <div class="mb-3">
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Waktu</label>
+                                <input type="time" id="manualTime" class="w-full border rounded px-3 py-2 text-sm">
+                            </div>
+                            <div class="mb-3">
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Filter Kelas</label>
+                                <select id="manualClassFilter" class="w-full border rounded px-3 py-2 text-sm" onchange="renderManualTable()">
+                                    <option value="">-- Pilih Kelas --</option>
+                                </select>
+                            </div>
+                            
+                            <div class="bg-blue-50 border border-blue-200 rounded p-3 text-xs text-blue-800 mt-4">
+                                <strong>Panduan:</strong> Filter kelas terlebih dahulu. Ceklis siswa atau ubah status (H/S/I/A). Lalu klik tombol kirim di bawah untuk menyimpan massal.
+                            </div>
+                            <button onclick="submitManualData()" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded mt-4 transition">
+                                <i class="fas fa-paper-plane mr-2"></i>KIRIM DATA
+                            </button>
+                        </div>
+                        
+                        <!-- Student List -->
+                        <div class="md:col-span-2 border rounded">
+                            <div class="bg-gray-100 p-2 border-b flex justify-between items-center sticky top-0">
+                                <h3 class="font-bold text-sm">Daftar Siswa</h3>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs">Set Semua:</span>
+                                    <button class="px-2 py-1 bg-green-100 text-green-700 rounded text-xs" onclick="setAllManualStatus('H')">H</button>
+                                    <button class="px-2 py-1 bg-yellow-100 text-yellow-700 rounded text-xs" onclick="setAllManualStatus('S')">S</button>
+                                    <button class="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs" onclick="setAllManualStatus('I')">I</button>
+                                    <button class="px-2 py-1 bg-red-100 text-red-700 rounded text-xs" onclick="setAllManualStatus('A')">A</button>
+                                </div>
+                            </div>
+                            <div class="max-h-[500px] overflow-y-auto">
+                                <table class="min-w-full text-sm">
+                                    <thead class="bg-white sticky top-0 shadow-sm">
+                                        <tr>
+                                            <th class="px-3 py-2 text-left">Nama (Kelas)</th>
+                                            <th class="px-3 py-2 text-center w-40">Status</th>
+                                            <th class="px-3 py-2 text-left">Keterangan</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="manualTableBody" class="divide-y">
+                                        <tr><td colspan="3" class="text-center py-4 text-gray-500">Pilih kelas terlebih dahulu</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Rekap Tab -->
+                <div id="tab-rekapitulasi" class="hidden-el">
+                    <div class="flex gap-2 items-center mb-4 bg-gray-50 p-3 rounded border justify-between flex-wrap">
+                        <div class="flex gap-2">
+                            <input type="date" id="rekapDate" class="border rounded px-3 py-1.5 text-sm" onchange="generateRekap()">
+                            <select id="rekapClass" class="border rounded px-3 py-1.5 text-sm" onchange="generateRekap()">
+                                <option value="">Semua Kelas</option>
+                            </select>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-sm transition"><i class="fas fa-file-excel mr-1"></i>Excel</button>
+                            <button onclick="exportToPDF()" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-sm transition"><i class="fas fa-file-pdf mr-1"></i>PDF</button>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <div class="table-wrapper max-h-[400px] overflow-y-auto border rounded">
+                                <table class="min-w-full text-sm text-center" id="rekapTable">
+                                    <thead class="bg-gray-100 sticky top-0">
+                                        <tr>
+                                            <th class="px-2 py-2 text-left">Kelas</th>
+                                            <th class="px-2 py-2">Total</th>
+                                            <th class="px-2 py-2 text-green-600">H</th>
+                                            <th class="px-2 py-2 text-yellow-600">S</th>
+                                            <th class="px-2 py-2 text-blue-600">I</th>
+                                            <th class="px-2 py-2 text-red-600">A</th>
+                                            <th class="px-2 py-2">% Kehadiran</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="rekapTableBody" class="divide-y"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="border rounded p-4 flex items-center justify-center bg-white h-[400px]">
+                            <canvas id="rekapChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-white border-t mt-auto">
+        <div class="max-w-7xl mx-auto px-4 py-4 text-center text-xs text-gray-500">
+            Copyright &copy; Hak Cipta SMP Negeri 3 Katingan Hilir - <span id="currentYear"></span>. All rights reserved.
+        </div>
+    </footer>
+
+    <!-- Audio Beep (Base64 untuk menghindari masalah external URL) -->
+    <audio id="beepSound" src="data:audio/mp3;base64,//NExAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq
